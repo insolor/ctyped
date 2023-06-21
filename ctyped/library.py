@@ -10,7 +10,8 @@ from typing import Any, Optional, Callable, Union, List, Dict, Type, ContextMana
 
 from .exceptions import UnsupportedTypeError, TypehintError, CtypedException
 from .sniffer import NmSymbolSniffer, SniffResult
-from .types import CChars, CastedTypeBase, CStruct
+from .structure import structure
+from .types import CChars, CastedTypeBase
 from .utils import cast_type, extract_func_info, FuncInfo
 
 LOGGER = logging.getLogger(__name__)
@@ -204,53 +205,7 @@ class Library:
         :param int_sign: Flag. Whether to use signed (True) or unsigned (False) ints.
 
         """
-        params = locals()
-
-        def wrapper(cls_):
-
-            annotations = {
-                attrname: attrhint for attrname, attrhint in cls_.__annotations__.items()
-                if not attrname.startswith('_')}
-
-            with self.scope(**params):
-
-                cls_name = cls_.__name__
-
-                info = FuncInfo(
-                    name_py=cls_name, name_c=None,
-                    annotations=annotations, options=self.scope.flatten())
-
-                # todo maybe support big/little byte order
-                struct = type(cls_name, (CStruct, cls_), {})
-
-                ct_fields = {}
-                fields = []
-
-                for attrname, attrhint in annotations.items():
-
-                    if attrhint == cls_name:
-                        casted = ctypes.POINTER(struct)
-                        ct_fields[attrname] = struct
-
-                    else:
-                        casted = cast_type(info, attrname, attrhint)
-
-                        if issubclass(casted, CastedTypeBase):
-                            ct_fields[attrname] = casted
-
-                    fields.append((attrname, casted))
-
-                LOGGER.debug(f'Structure {cls_name} fields: {fields}')
-
-                if pack:
-                    struct._pack_ = pack
-
-                struct._ct_fields = ct_fields
-                struct._fields_ = fields
-
-            return struct
-
-        return wrapper
+        return structure(pack=pack, str_type=str_type, int_bits=int_bits, int_sign=int_sign, scope=self.scope)
 
     def cls(
             self, *,
